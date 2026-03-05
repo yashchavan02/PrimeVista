@@ -2,78 +2,73 @@
 
 ## Prerequisites
 - AWS Account
-- Domain name (optional, for HTTPS)
 - GitHub repository with your code
+- Domain name (optional, for HTTPS)
 
 ---
 
-## Step 1: Configure Environment Variables
+## AWS Console Setup
 
-### Backend (.env)
-Create `backend/.env` with these variables:
-```
-PORT=3000
-NODE_ENV=production
+### 1. Launch EC2 Instance
+1. Go to **AWS Console** → **EC2** → **Launch Instance**
+2. Choose: **Ubuntu 22.04 LTS**
+3. Instance type: **t3.medium** (recommended) or t2.micro
+4. Create key pair (download and save securely)
+5. Network Settings:
+   - VPC: Default
+   - Subnet: Public subnet
+   - Auto-assign public IP: **Enable**
+6. Security Group - Add rules:
+   - SSH (port 22) - Your IP
+   - HTTP (port 80) - Anywhere (0.0.0.0/0)
+   - HTTPS (port 443) - Anywhere (0.0.0.0/0)
+7. Launch instance
 
-# AWS Configuration
-AWS_ACCESS_KEY_ID=your_aws_iam_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_iam_secret_key
-AWS_REGION=ap-south-1
-S3_RAW_BUCKET=your-raw-video-bucket
-S3_HLS_BUCKET=your-hls-output-bucket
-CLOUDFRONT_BASE_URL=https://your-cloudfront-distribution.cloudfront.net
+### 2. Note Your Public IP
+- Copy the **Public IPv4 address** (e.g., 15.207.185.62)
 
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-```
+---
 
-### Frontend (.env)
-Create `frontend/.env` with these variables:
+## Local Machine: Prepare Code
+
+### 1. Update Frontend Environment
+Create/update `frontend/.env`:
 ```
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_API_BASE_URL=http://15.207.185.62/api
+VITE_API_BASE_URL=http://YOUR_EC2_IP/api
 ```
 
----
-
-## Step 2: Build Frontend
-
+### 2. Build Frontend
 ```bash
 cd frontend
 npm install
 npm run build
 ```
 
-The built files will be in `frontend/dist/`
-
----
-
-## Step 3: Launch EC2 Instance
-
-1. Go to AWS Console → EC2 → Launch Instance
-2. Choose: **Ubuntu 22.04 LTS** (Free tier eligible)
-3. Instance type: **t3.medium** (recommended) or t2.micro
-4. Create key pair (download and save securely)
-5. Security Group:
-   - SSH (port 22) - Your IP
-   - HTTP (port 80) - Anywhere
-   - HTTPS (port 443) - Anywhere
-6. Launch instance
-
----
-
-## Step 4: Connect to EC2
-
+### 3. Push to GitHub
 ```bash
-ssh -i your-key.pem ubuntu@15.207.185.62
+git add .
+git commit -m "Production deployment ready"
+git push origin main
 ```
 
 ---
 
-## Step 5: Install Node.js
+## EC2 Instance: Deployment
 
+### 1. Connect to EC2
+```bash
+ssh -i your-key.pem ubuntu@YOUR_EC2_IP
+```
+
+### 2. Update System Packages
+```bash
+sudo apt update
+sudo apt upgrade -y
+```
+
+### 3. Install Node.js
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
@@ -81,96 +76,105 @@ node -v
 npm -v
 ```
 
----
-
-## Step 6: Install FFmpeg (for video processing)
-
+### 4. Install FFmpeg (for video processing)
 ```bash
-sudo apt update
 sudo apt install ffmpeg
 ffmpeg -version
 ```
 
----
-
-## Step 7: Upload Code to EC2
-
-### Option A: Using Git (Recommended)
+### 5. Install Nginx
 ```bash
-# On EC2
+sudo apt install nginx
+sudo systemctl enable nginx
+```
+
+### 6. Clone Repository
+```bash
 cd ~
-git clone https://github.com/your-username/video-streaming.git
-cd video-streaming
+git clone https://github.com/your-username/PrimeVista.git
+cd PrimeVista
 ```
 
-### Option B: Using SCP
+### 7. Create Backend Environment File
 ```bash
-# On local machine
-scp -r -i your-key.pem "C:\path\to\video-streaming" ubuntu@15.207.185.62:~/
-```
-
----
-
-## Step 8: Install Backend Dependencies
-
-```bash
-cd ~/video-streaming/backend
-npm install --production
-```
-
----
-
-## Step 9: Configure Backend Environment
-
-```bash
-cd ~/video-streaming/backend
+cd backend
 nano .env
 ```
 
-Paste your backend environment variables. Save and exit (Ctrl+O, Enter, Ctrl+X)
+Add these variables:
+```
+PORT=3000
+NODE_ENV=production
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=ap-south-1
+S3_RAW_BUCKET=your-raw-bucket
+S3_HLS_BUCKET=your-hls-bucket
+CLOUDFRONT_BASE_URL=https://your-cloudfront.cloudfront.net
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
 
----
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`
 
-## Step 10: Install PM2 (Process Manager)
+### 8. Create Frontend Environment File
+```bash
+cd ../frontend
+nano .env
+```
 
+Add these variables:
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_API_BASE_URL=http://YOUR_EC2_IP/api
+```
+
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`
+
+### 9. Install Backend Dependencies
+```bash
+cd ../backend
+npm install --production
+```
+
+### 10. Install PM2 (Process Manager)
 ```bash
 sudo npm install -g pm2
 pm2 --version
 ```
 
----
-
-## Step 11: Start Backend Server
-
+### 11. Start Backend Server
 ```bash
-cd ~/video-streaming/backend
 pm2 start src/index.js --name primevista
-
-# Verify it's running
 pm2 status
 pm2 logs primevista
 ```
 
----
-
-## Step 12: Auto-start on Reboot
-
+### 12. Auto-start on Reboot
 ```bash
 pm2 startup
-# Follow the output instructions (copy the command it shows)
+# Copy and run the command shown in output
 pm2 save
 ```
 
----
-
-## Step 13: Set Up Nginx
-
+### 13. Install Frontend Dependencies and Build
 ```bash
-sudo apt update
-sudo apt install nginx
+cd ../frontend
+npm install
+npm run build
 ```
 
-Create Nginx config:
+### 14. Fix File Permissions
+```bash
+sudo chown -R www-data:www-data /home/ubuntu/PrimeVista/frontend/dist
+sudo chmod -R 755 /home/ubuntu/PrimeVista/frontend/dist
+sudo chmod 755 /home/ubuntu
+sudo chmod 755 /home/ubuntu/PrimeVista
+sudo chmod 755 /home/ubuntu/PrimeVista/frontend
+```
+
+### 15. Configure Nginx
 ```bash
 sudo nano /etc/nginx/sites-available/primevista
 ```
@@ -179,11 +183,11 @@ Add this configuration:
 ```nginx
 server {
     listen 80;
-    server_name 15.207.185.62;
+    server_name YOUR_EC2_IP;
 
     # Frontend static files
     location / {
-        root /home/ubuntu/video-streaming/frontend/dist;
+        root /home/ubuntu/PrimeVista/frontend/dist;
         index index.html;
         try_files $uri $uri/ /index.html;
     }
@@ -192,25 +196,23 @@ server {
     location /api {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
-        $http_upgrade proxy_set_header Upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # WebSocket support for video uploads
-    location /ws {
+    # Health check
+    location /health {
         proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
     }
 }
 ```
 
-Enable the site and restart Nginx:
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`
+
+### 16. Enable Nginx Site
 ```bash
 sudo ln -s /etc/nginx/sites-available/primevista /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -220,50 +222,68 @@ sudo systemctl restart nginx
 
 ---
 
-## Step 14: Access Your App
+## Testing
 
-Open browser: `http://15.207.185.62`
+### 1. Test Backend API
+```bash
+curl http://localhost:3000/health
+```
+Expected: `{"status":"ok","timestamp":"..."}`
+
+### 2. Test Nginx Frontend
+```bash
+curl http://localhost
+```
+Expected: HTML page with "PrimeVista"
+
+### 3. Test External Access
+Open browser: `http://YOUR_EC2_IP`
+
+### 4. Test API from External
+```bash
+curl http://YOUR_EC2_IP/api/videos
+```
 
 ---
 
-## Important Configuration Checklist
+## Quick Redeploy Commands
 
-- [ ] S3 buckets created with CORS enabled
-- [ ] CloudFront distribution created pointing to S3_HLS_BUCKET
-- [ ] Supabase project created with tables (videos, users)
-- [ ] Supabase RLS policies configured
-- [ ] EC2 IP added to Supabase allowed domains (if needed)
-- [ ] Environment variables set in backend/.env
+```bash
+# Connect to EC2
+ssh -i your-key.pem ubuntu@YOUR_EC2_IP
 
----
+# Pull latest code
+cd ~/PrimeVista
+git pull origin main
 
-## Environment Variables Reference
+# Rebuild frontend
+cd frontend
+npm install
+npm run build
 
-### Backend
-| Variable | Description |
-|----------|-------------|
-| PORT | Server port (default: 3000) |
-| NODE_ENV | Set to "production" |
-| AWS_ACCESS_KEY_ID | AWS IAM user access key |
-| AWS_SECRET_ACCESS_KEY | AWS IAM user secret key |
-| AWS_REGION | AWS region (e.g., ap-south-1) |
-| S3_RAW_BUCKET | S3 bucket for uploaded videos |
-| S3_HLS_BUCKET | S3 bucket for HLS output |
-| CLOUDFRONT_BASE_URL | CloudFront distribution URL |
-| SUPABASE_URL | Supabase project URL |
-| SUPABASE_SERVICE_ROLE_KEY | Supabase service role key |
+# Fix permissions
+sudo chown -R www-data:www-data /home/ubuntu/PrimeVista/frontend/dist
+sudo chmod -R 755 /home/ubuntu/PrimeVista/frontend/dist
 
-### Frontend
-| Variable | Description |
-|----------|-------------|
-| VITE_SUPABASE_URL | Supabase project URL |
-| VITE_SUPABASE_ANON_KEY | Supabase anon key |
-| VITE_API_BASE_URL | Backend API URL (http://your-ip/api) |
+# Restart services
+pm2 restart primevista
+sudo systemctl restart nginx
+```
 
 ---
 
 ## Troubleshooting
 
+| Issue | Solution |
+|-------|----------|
+| Connection timed out | Check AWS Security Group - HTTP port 80 open to 0.0.0.0/0 |
+| 500 Internal Server Error | Check nginx error log: `sudo tail -f /var/log/nginx/error.log` |
+| Permission denied | Run permission fix commands from Step 14 |
+| PM2 not running | `pm2 start src/index.js --name primevista` |
+| Nginx not running | `sudo systemctl restart nginx` |
+| Can't reach API | Check backend: `pm2 logs primevista` |
+
+### Common Commands
 ```bash
 # Check PM2 status
 pm2 status
@@ -274,53 +294,40 @@ pm2 logs primevista
 # Restart PM2
 pm2 restart primevista
 
-# Check Nginx logs
+# Check Nginx status
+sudo systemctl status nginx
+
+# Check Nginx error log
 sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/access.log
 
-# Check Nginx config
-sudo nginx -t
+# Test API locally
+curl http://localhost:3000/health
 
-# Restart Nginx
-sudo systemctl restart nginx
-
-# Check if port 3000 is running
-sudo lsof -i :3000
-
-# Test API locally on EC2
-curl http://localhost:3000/api/videos
+# Test Nginx locally
+curl http://localhost
 ```
 
 ---
 
-## Future: Adding HTTPS (Optional)
+## Environment Variables Reference
 
-1. Get a domain or use AWS elastic IP
-2. Use Let's Encrypt:
-   ```bash
-   sudo apt install certbot python3-certbot-nginx
-   sudo certbot --nginx -d your-domain.com
-   ```
-3. Update VITE_API_BASE_URL to https://your-domain.com/api
-4. Rebuild frontend and redeploy
+### Backend
+| Variable | Example |
+|----------|---------|
+| PORT | 3000 |
+| NODE_ENV | production |
+| AWS_ACCESS_KEY_ID | AKIA... |
+| AWS_SECRET_ACCESS_KEY | xxx... |
+| AWS_REGION | ap-south-1 |
+| S3_RAW_BUCKET | video-streaming-raw |
+| S3_HLS_BUCKET | hls-video-streaming |
+| CLOUDFRONT_BASE_URL | https://xxx.cloudfront.net |
+| SUPABASE_URL | https://xxx.supabase.co |
+| SUPABASE_SERVICE_ROLE_KEY | eyJ... |
 
----
-
-## Quick Redeploy Commands
-
-```bash
-# Pull latest code
-cd ~/video-streaming
-git pull origin main
-
-# Rebuild frontend
-cd ~/video-streaming/frontend
-npm install
-npm run build
-
-# Restart backend
-pm2 restart primevista
-
-# Restart Nginx
-sudo systemctl restart nginx
-```
+### Frontend
+| Variable | Example |
+|----------|---------|
+| VITE_SUPABASE_URL | https://xxx.supabase.co |
+| VITE_SUPABASE_ANON_KEY | eyJ... |
+| VITE_API_BASE_URL | http://15.207.185.62/api |
