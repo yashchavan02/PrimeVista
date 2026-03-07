@@ -9,7 +9,6 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 const POLLING_INTERVAL = 10000;
-
 let isProcessing = false;
 
 const checkFfmpeg = async () => {
@@ -90,25 +89,30 @@ const generateHLS = async (inputPath, outputDir) => {
     const segmentPattern = path.join(variantDir, 'segment%03d.ts');
 
     const ffmpegCmd = `
-      nice -n 10 ffmpeg -threads 1 -preset veryfast \
-      -i "${inputPath}" \
-      -vf scale=-2:${height} \
-      -b:v ${bitrate} \
-      -maxrate ${bitrate} \
-      -bufsize ${bitrate} \
-      -hls_time 4 \
-      -hls_playlist_type vod \
-      -hls_segment_filename "${segmentPattern}" \
-      "${playlistPath}"
-    `;
+nice -n 10 ffmpeg -threads 1 \
+-i "${inputPath}" \
+-vf "scale=-2:${height}" \
+-c:v libx264 \
+-preset veryfast \
+-b:v ${bitrate} \
+-maxrate ${bitrate} \
+-bufsize ${bitrate} \
+-c:a aac \
+-hls_time 4 \
+-hls_playlist_type vod \
+-hls_segment_filename "${segmentPattern}" \
+"${playlistPath}"
+`;
 
     console.log(`Running FFmpeg for ${height}p`);
+    console.log(`Command: ${ffmpegCmd}`);
+
     await execAsync(ffmpegCmd);
 
     variantPlaylists.push({
       uri: `${index}/index.m3u8`,
       bandwidth: parseInt(bitrate) * 1000,
-      resolution: `${height}p`
+      resolution: `1280x${height}`
     });
   }
 
@@ -169,7 +173,6 @@ const startVideoWorker = () => {
   };
 
   setInterval(poll, POLLING_INTERVAL);
-
   poll();
 };
 
